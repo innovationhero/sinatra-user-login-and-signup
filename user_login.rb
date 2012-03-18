@@ -5,10 +5,9 @@ require "digest/sha2"
 enable :sessions
 
 DataMapper.setup(:default, "sqlite3://#{Dir.pwd}/users.db")
-DataMapper::Property::String.length(255)
 DataMapper::Property.required(true)
 
-#this has to be above the model definition to work
+#hack - this has to be above the model definition to work
 #if this isn't in a module then the User class can't use the helper method
 module PasswordHasher
 	def hash_password(password, salt)
@@ -24,12 +23,17 @@ class User
 	
 	property :id, Serial
 	property :name, String
-	property :salt, String
-	property :hashed_password, String
+	property :salt, String, :length => 32
+	property :hashed_password, String, :length => 64
 	property :last_login_time, DateTime, :required => false
 	property :last_login_ip, String, :required => false
 	property :current_login_time, DateTime
 	property :current_login_ip, String
+	
+	#require dm/validations
+	#validates_uniqueness_of :name, :message => "That username has already been taken"
+	#validates_length_of :name, :min => 1, :max => 16, :message => "Username must be between 1 and 16 characters"
+	#validates
 	
 	def authenticate(password)
 		if (hash_password(password, salt)).eql?(hashed_password)
@@ -51,12 +55,11 @@ helpers do
 	
 	def generate_salt
 		rng = Random.new
-		Array.new(40){ rng.rand(33...126).chr }.join
+		Array.new(User.salt.length){ rng.rand(33...126).chr }.join
 	end
 	
 	#Flash helper based on the one from here:
 	#https://github.com/daddz/sinatra-dm-login/blob/master/helpers/sinatra.rb
-	#More generic
 	def show_flash(key)
 		if session[key]
 			flash = session[key]
@@ -141,6 +144,8 @@ post "/user/create" do
 		session[:flash] = "Signup failed, please try again"
 		redirect "/"
 	end
+	
+	#also check to make sure password is a certain length, contains an uppercase character, number, lowercase letter etc.
 end
 
 DataMapper.auto_upgrade!
